@@ -1,0 +1,2 @@
+# smartc
+Smart contracts redesigned
