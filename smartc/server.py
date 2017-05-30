@@ -29,6 +29,8 @@ class MyServerProtocol(WebSocketServerProtocol):
 
     def onClose(self, wasClean, code, reason):
         print("WebSocket connection closed: {0}".format(reason))
+        self.factory.unregister(self)
+
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
@@ -80,7 +82,6 @@ if __name__ == '__main__':
 
     app = web.Application()
     app.router.add_get('/', handle)
-    app.router.add_get('/{name}', handle)
 
     handler = app.make_handler()
     webcoro = loop.create_server(handler, '0.0.0.0', 8080)
@@ -93,4 +94,12 @@ if __name__ == '__main__':
         pass
     finally:
         server.close()
-        loop.close()
+        webserver.close()
+        loop.run_until_complete(webserver.wait_closed())
+        loop.run_until_complete(app.shutdown())
+        loop.run_until_complete(handler.shutdown(60.0))
+        loop.run_until_complete(app.cleanup())
+
+    print(' Shutdown successful')
+    loop.close()
+    
