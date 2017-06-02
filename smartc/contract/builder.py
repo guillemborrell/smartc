@@ -169,7 +169,6 @@ class Contract:
                     key,
                     eval_args))
                 self.graph[key].value = self.graph[key].method(*eval_args)
-                self.eval_graph[key]['eval'] = 1
                 
             else:
                 break
