@@ -54,6 +54,19 @@ class Method:
         self.graph = None
         self.attrs = {}
 
+    @staticmethod
+    def _merge_graphs(graph1, graph2):
+        result = dict(graph1)
+        for k, v in graph2.items():
+            if k in result:
+                result[k] = graph1[k]
+                for target in graph2[k].to:
+                    result[k].add_target(target)
+            else:
+                result[k] = graph2[k]
+
+        return result
+        
     def __call__(self, *args):
         ev_name = self.name + gen_short_random()
         is_attribute = [type(a) == Attribute for a in args]
@@ -71,7 +84,7 @@ class Method:
         else:
             for arg in args:
                 if type(arg) == Node:
-                    self.graph.update(arg.graph)
+                    self.graph = self._merge_graphs(self.graph, arg.graph)
                     self.attrs.update(arg.attrs)
                 elif type(arg) == Attribute:
                     if arg.name not in self.graph:
@@ -126,6 +139,7 @@ class Contract:
             self.attrs = node.attrs
 
         self.eval_graph = self._build_eval_graph(node.graph)
+        self.applied_attributes = []
         
     def visualize(self):
         dot = Digraph(comment='Contract graph', format='png')
@@ -155,12 +169,14 @@ class Contract:
             # Check the number of previous evaluations
             previous = self.graph[node].args
             evals = sum([self.eval_graph[n]['eval'] for n in previous])
-            if evals == self.eval_graph[node]['total']:
+            has_value = self.eval_graph[node]['eval']
+            if evals == self.eval_graph[node]['total'] and not has_value:
                 return node
         
-    def _leaf_eval(self, key):
-        for _ in range(10000):  # Max evals. Never use while.
-            key = self._next_node_to_eval(key)
+    def _leaf_eval(self, attribute):
+        for i in range(len(self.eval_graph)):  # Max evals. Never use while.
+            print('Graph walk', i+1)
+            key = self._next_node_to_eval(attribute)
             if key:
                 args = self.graph[key].args
                 eval_args = [self.graph[a].value for a in args]
@@ -169,15 +185,25 @@ class Contract:
                     key,
                     eval_args))
                 self.graph[key].value = self.graph[key].method(*eval_args)
-                
+                self.eval_graph[key]['eval'] = 1
+
             else:
                 break
         
     def set(self, attribute, value):
+        print('Set attribute', attribute)
         if attribute in self.attrs:
             if type(value) == self.attrs[attribute].attr_type:
                 self.graph[attribute].value = value
+                print('Walk from', attribute)
                 self._leaf_eval(attribute)
+                # Traverse from the other attributes in case there are
+                # additional paths
+                for other_attribute in self.applied_attributes:
+                    print('Walk from', other_attribute)
+                    self._leaf_eval(other_attribute)
+
+                self.applied_attributes.append(attribute)
 
             else:
                 raise ValueError(
@@ -216,10 +242,10 @@ if __name__ == '__main__':
     a = Attribute('a', float)
     b = Attribute('b', int)
     c = something(a)
-
     x = another(a, c)
+    q = something(a)
     y = another(b, x)
-    z = result(y)
+    z = another(y, q)
     
     contract = Contract(z)
     contract.set('a', 1.0)
