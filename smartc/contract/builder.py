@@ -33,7 +33,7 @@ class GraphNode:
         self.to.append(target)
 
     def __repr__(self):
-        return '[{}]'.format(', '.join(self.to))
+        return '[{}: {}]'.format(', '.join(self.to), self.value)
         
 
 class Node:
@@ -66,7 +66,7 @@ class Method:
                         'All the arguments of the first step'
                         ' have to be of type Attributes'
                         )
-                self.graph[arg.name] = GraphNode(None, None, None)
+                self.graph[arg.name] = GraphNode((), None, None)
                 self.attrs[arg.name] = arg
         else:
             for arg in args:
@@ -75,7 +75,7 @@ class Method:
                     self.attrs.update(arg.attrs)
                 elif type(arg) == Attribute:
                     if arg.name not in self.graph:
-                        self.graph[arg.name] = GraphNode(None, None, None)
+                        self.graph[arg.name] = GraphNode((), None, None)
                     self.attrs[arg.name] = arg
                 else:
                     raise ValueError(
@@ -110,6 +110,14 @@ def visualize(node):
             
 
 class Contract:
+    @staticmethod
+    def _build_eval_graph(graph):
+        eval_graph = {}
+        for k, v in graph.items():
+            eval_graph[k] = dict(total=len(v.args), eval=0)
+
+        return eval_graph
+    
     def __init__(self, node=None):
         self.graph = None
         self.attrs = None
@@ -117,13 +125,8 @@ class Contract:
             self.graph = node.graph
             self.attrs = node.attrs
 
-    @classmethod
-    def from_graph(cls, graph, attrs):
-        cls.graph = tree
-        cls.attrs = attrs
-
-        return cls
-
+        self.eval_graph = self._build_eval_graph(node.graph)
+        
     def visualize(self):
         dot = Digraph(comment='Contract graph', format='png')
         for k, v in self.graph.items():
@@ -139,29 +142,43 @@ class Contract:
         
         dot.render()
 
+    def _traverse(self, node):
+        for target in self.graph[node].to:
+            yield target
+            for subtarget in self.graph[target].to:
+                for t in self._traverse(subtarget):
+                    yield t
+        
+    def _next_node_to_eval(self, attribute):
+        self.eval_graph[attribute]['eval'] = 1
+        for node in self._traverse(attribute):
+            # Check the number of previous evaluations
+            previous = self.graph[node].args
+            evals = sum([self.eval_graph[n]['eval'] for n in previous])
+            if evals == self.eval_graph[node]['total']:
+                return node
+        
     def _leaf_eval(self, key):
-        targets = self.graph[key].to
-        for target in targets:
-            args = self.graph[target].args
-            condition = [self.graph[a].value is not None for a in args]
-            if all(condition):
+        for _ in range(10000):  # Max evals. Never use while.
+            key = self._next_node_to_eval(key)
+            if key:
+                args = self.graph[key].args
                 eval_args = [self.graph[a].value for a in args]
-                print('Eval {} with args {}'.format(
-                    self.graph[target].method.__name__,
-                    eval_args
-                )
-                      )
-                self.graph[target].value = self.graph[target].method(*eval_args)
-                for k in self.graph[key].to:
-                    yield self._leaf_eval(k)
+                print('Eval {} in node {} with args {}'.format(
+                    self.graph[key].method.__name__,
+                    key,
+                    eval_args))
+                self.graph[key].value = self.graph[key].method(*eval_args)
+                self.eval_graph[key]['eval'] = 1
+                
+            else:
+                break
         
     def set(self, attribute, value):
         if attribute in self.attrs:
             if type(value) == self.attrs[attribute].attr_type:
                 self.graph[attribute].value = value
-                print('Trying to evaluate...')
-                for key in self._leaf_eval(attribute):
-                    pass
+                self._leaf_eval(attribute)
 
             else:
                 raise ValueError(
@@ -175,6 +192,13 @@ class Contract:
                     )
                 )
 
+    def run(self, attributes):
+        for k, v in attributes.items():
+            self.set(k, v)
+
+    def append(self, attribute, value):
+        pass
+
         
 if __name__ == '__main__':
     @node
@@ -184,6 +208,11 @@ if __name__ == '__main__':
     @node
     def another(x,y):
         return x+y
+
+    @node
+    def result(z):
+        print('The final result is {}'.format(z))
+        return z
     
     a = Attribute('a', float)
     b = Attribute('b', int)
@@ -191,10 +220,11 @@ if __name__ == '__main__':
 
     x = another(a, c)
     y = another(b, x)
+    z = result(y)
     
-    contract = Contract(y)
+    contract = Contract(z)
     contract.set('a', 1.0)
     contract.set('b', 2)
+
     contract.visualize()
 
-    
