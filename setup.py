@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 
 from setuptools import setup
@@ -13,8 +12,8 @@ setup(
         'smartc',
         ],
     zip_safe=False,
-    install_requires=['autobahn', 'aiohttp'],
+    install_requires=['autobahn', 'aiohttp', 'graphviz'],
     include_package_data=True,
-    setup_requires=[],
+    setup_requires=['flake8'],
     tests_require=[]
     )
