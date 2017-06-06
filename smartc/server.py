@@ -17,13 +17,21 @@
 from tornado import web, ioloop
 from ws.handlers import SocketHandler
 from monitor.handlers import IndexHandler
+import os
 
 app = web.Application([
     (r'/', IndexHandler),
     (r'/ws', SocketHandler),
+    (r'/(favicon.ico)', web.StaticFileHandler, {
+        'path': os.path.join(os.pardir, 'static')
+    }),
     ])    
 
-if __name__ == '__main__':
-    app.listen(8080)
-    ioloop.IOLoop.instance().start()
 
+def main(port):
+    app.listen(port)
+    ioloop.IOLoop.instance().start()
+    
+
+if __name__ == '__main__':
+    main(8080)
