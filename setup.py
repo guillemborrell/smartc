@@ -12,7 +12,7 @@ setup(
         'smartc',
         ],
     zip_safe=False,
-    install_requires=['autobahn', 'aiohttp', 'graphviz'],
+    install_requires=['tornado', 'graphviz'],
     include_package_data=True,
     setup_requires=['flake8'],
     tests_require=[]

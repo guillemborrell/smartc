@@ -1,69 +1,39 @@
-from autobahn.asyncio.websocket import WebSocketServerProtocol, \
-    WebSocketServerFactory
+#   Smartc. Smart contracts for real time applications.
+#   Copyright (C) 2017 Guillem Borrell i Nogueras (@guillemborrell)
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU Affero General Public License as published
+#   by the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU Affero General Public License for more details.
+#
+#   You should have received a copy of the GNU Affero General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from tornado import websocket
 
-class ServerProtocol(WebSocketServerProtocol):
+clients = []
 
-    def onConnect(self, request):
-        print("Client connecting: {0}".format(request.peer))
+class SocketHandler(websocket.WebSocketHandler):
+    def check_origin(self, origin):
+        print(origin)
+        return True
+    
+    def open(self):
+        if self not in clients:
+            print('Added client', self)
+            clients.append(self)
 
-    def onOpen(self):
-        self.factory.register(self)
-        print("WebSocket connection open. Client registered")
+    def on_message(self, message):
+        print(message)
+        self.write_message(message)
 
-    def onMessage(self, payload, isBinary):
-        if isBinary:
-            print("Binary message received: {0} bytes".format(len(payload)))
-        else:
-            print("Text message received: {0}".format(payload.decode('utf8')))
+    def on_close():
+        if self in cl:
+            print('Removed client', self)
+            clients.remove(self)
 
-        # echo back message verbatim
-        self.sendMessage(payload, isBinary)
-
-    def onClose(self, wasClean, code, reason):
-        print("WebSocket connection closed: {0}".format(reason))
-        self.factory.unregister(self)
-
-
-    def connectionLost(self, reason):
-        WebSocketServerProtocol.connectionLost(self, reason)
-        self.factory.unregister(self)
-        
-
-class ServerFactory(WebSocketServerFactory):
-
-    """
-    Simple broadcast server broadcasting any message it receives to all
-    currently connected clients.
-    """
-
-    def __init__(self, url):
-        WebSocketServerFactory.__init__(self, url)
-        self.clients = []
-        self.tickcount = 0
-        self.tick()
-
-    def tick(self):
-        self.tickcount += 1
-        self.broadcast("tick %d from server" % self.tickcount)
-        self.loop.call_later(1, self.tick)
-
-    def register(self, client):
-        if client not in self.clients:
-            print("registered client {}".format(client.peer))
-            self.clients.append(client)
-
-    def unregister(self, client):
-        if client in self.clients:
-            print("unregistered client {}".format(client.peer))
-            self.clients.remove(client)
-
-    def broadcast(self, msg):
-        print("broadcasting message '{}' ..".format(msg))
-        for c in self.clients:
-            c.sendMessage(msg.encode('utf8'))
-            print("message sent to {}".format(c.peer))
-
-
-factory = ServerFactory(u"ws://127.0.0.1:9000")
-factory.protocol = ServerProtocol
