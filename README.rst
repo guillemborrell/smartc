@@ -1,4 +1,5 @@
-# smartc
+Smartc
+======
 
 Smart contracts for real time applications.
 
