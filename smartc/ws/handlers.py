@@ -18,6 +18,7 @@ from tornado import websocket
 
 clients = []
 
+
 class SocketHandler(websocket.WebSocketHandler):
     def check_origin(self, origin):
         print(origin)
@@ -32,8 +33,8 @@ class SocketHandler(websocket.WebSocketHandler):
         print(message)
         self.write_message(message)
 
-    def on_close():
-        if self in cl:
+    def on_close(self):
+        if self in clients:
             print('Removed client', self)
             clients.remove(self)
 
