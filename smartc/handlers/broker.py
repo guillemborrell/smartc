@@ -14,27 +14,17 @@
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from tornado import websocket
+import zmq
+import time
 
-clients = []
 
+def server_pub():
+    print("Starting...")
+    context = zmq.Context()
+    socket = context.socket(zmq.PUB)
+    socket.bind("tcp://127.0.0.1:5555")
+    topic = "pub"
 
-class SocketHandler(websocket.WebSocketHandler):
-    def check_origin(self, origin):
-        print(origin)
-        return True
-    
-    def open(self):
-        if self not in clients:
-            print('Added client', self)
-            clients.append(self)
-
-    def on_message(self, message):
-        print(message)
-        self.write_message(message)
-
-    def on_close(self):
-        if self in clients:
-            print('Removed client', self)
-            clients.remove(self)
-
+    for i in range(10):
+        socket.send_multipart([topic.encode(), b"a_message"])
+        time.sleep(1)

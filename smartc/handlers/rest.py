@@ -14,35 +14,9 @@
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
-
 from tornado import web
-from zmq.eventloop import ioloop
-
-from smartc.handlers.broker import server_pub
-from smartc.handlers.monitor import IndexHandler
-from smartc.handlers.push import PushHandler
-from smartc.handlers.rest import RestHandler
-
-from multiprocessing import Process
-
-ioloop.install()
-
-app = web.Application([
-    (r'/', IndexHandler),
-    (r'/push', PushHandler),
-    (r'/rest', RestHandler),
-    (r'/(favicon.ico)', web.StaticFileHandler, {
-        'path': os.path.join(os.pardir, 'static')
-    }),
-    ])
 
 
-def main(port):
-    app.listen(port)
-    ioloop.IOLoop.instance().start()
-    
-
-if __name__ == '__main__':
-    Process(target=server_pub).start()
-    main(8080)
+class RestHandler(web.RequestHandler):
+    def get(self):
+        self.write("Hello, world!")

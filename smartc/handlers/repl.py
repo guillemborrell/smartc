@@ -87,7 +87,7 @@ class MyClientProtocol(WebSocketClientProtocol):
 
 
 if __name__ == '__main__':
-    factory = WebSocketClientFactory('ws://127.0.0.1:8080/ws')
+    factory = WebSocketClientFactory('handlers://127.0.0.1:8080/push')
     factory.protocol = MyClientProtocol
 
     coro = loop.create_connection(factory, '127.0.0.1', 8080)
