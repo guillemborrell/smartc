@@ -15,16 +15,15 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+from multiprocessing import Process
 
 from tornado import web
 from zmq.eventloop import ioloop
 
-from smartc.handlers.broker import server_pub
+from smartc.broker import server_pub
 from smartc.handlers.monitor import IndexHandler
 from smartc.handlers.push import PushHandler
 from smartc.handlers.rest import RestHandler
-
-from multiprocessing import Process
 
 ioloop.install()
 
