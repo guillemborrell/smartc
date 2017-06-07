@@ -21,7 +21,7 @@ from tornado import web
 from zmq.eventloop import ioloop
 
 from smartc.broker import server_pub
-from smartc.handlers.monitor import IndexHandler
+from smartc.handlers.web import IndexHandler
 from smartc.handlers.push import PushHandler
 from smartc.handlers.rest import RestHandler
 
