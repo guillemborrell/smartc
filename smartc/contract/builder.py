@@ -71,10 +71,11 @@ class GraphNode:
     :param method: Function to be evaluated
     :param value: Result of the function
     """
-    def __init__(self, args, method, value):
+    def __init__(self, args, method, value, min_args=None):
         self.args = args
         self.method = method
         self.value = value
+        self.min_args = min_args
         self.to = []
 
     def add_target(self, target):
@@ -117,21 +118,32 @@ class Method:
         self.function = f
         self.graph = None
         self.attrs = {}
+        self.ev_name = None
 
     @staticmethod
     def _merge_graphs(graph1, graph2):
         """
         Convenience function to merge the graph coming from two nodes
         """
-        result = dict(graph1)
-        for k, v in graph2.items():
-            if k in result:
+        keys_graph1 = [k for k in graph1]
+        keys_graph2 = [k for k in graph2]
+        keys_graph1.extend(keys_graph2)
+        keys_set = set(keys_graph1)
+        result = dict()
+
+        for k in keys_set:
+            if k in graph1 and k not in graph2:
                 result[k] = graph1[k]
-                for target in graph2[k].to:
-                    result[k].add_target(target)
-            else:
+
+            elif k in graph2 and k not in graph1:
                 result[k] = graph2[k]
 
+            elif k in graph1 and k in graph2:
+                targets = graph1[k].to + graph2[k].to
+                value = graph1[k]
+                value.to = targets                    
+                result[k] = value
+                
         return result
 
     def __call__(self, *args):
@@ -142,7 +154,7 @@ class Method:
         """
         # This is the name of the node, that comes from the name of the
         # name of the function that is evaluated
-        ev_name = self.name + gen_short_random()
+        self.ev_name = self.name + gen_short_random()
 
         # Empty graph, that will be build from the preceding nodes
         self.graph = {}
@@ -165,16 +177,28 @@ class Method:
                     )
 
         # Update the graph with the present node
-        self.graph[ev_name] = GraphNode(tuple(a.name for a in args),
+        self.graph[self.ev_name] = GraphNode(tuple(a.name for a in args),
                                         self.function,
                                         None)
 
         # Update the list of targets in the preceding nodes
         for arg in args:
-            self.graph[arg.name].add_target(ev_name)
+            self.graph[arg.name].add_target(self.ev_name)
 
         # Return a node to keep building.
-        return Node(ev_name, self.graph, attrs=self.attrs)
+        return Node(self.ev_name, self.graph, attrs=self.attrs)
+
+
+def push_first(*args):
+    def push_first_function(*args):
+        for a in args:
+            if a is not None:
+                return a
+
+    method = Method(push_first_function)
+    node = method(*args)
+    node.graph[method.ev_name].min_args = 1
+    return node
 
 
 def node(f):
@@ -235,7 +259,10 @@ class Contract:
         """
         eval_graph = {}
         for k, v in graph.items():
-            eval_graph[k] = dict(total=len(v.args), eval=0)
+            if v.min_args is None:
+                eval_graph[k] = dict(total=len(v.args), eval=0)
+            else:
+                eval_graph[k] = dict(total=v.min_args, eval=0)
 
         return eval_graph
 
@@ -295,7 +322,7 @@ class Contract:
             previous = self.graph[node].args
             evals = sum([self.eval_graph[n]['eval'] for n in previous])
             has_value = self.eval_graph[node]['eval']
-            if evals == self.eval_graph[node]['total'] and not has_value:
+            if evals >= self.eval_graph[node]['total'] and not has_value:
                 return node
 
     def _node_eval(self, attribute):
