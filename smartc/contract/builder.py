@@ -71,11 +71,12 @@ class GraphNode:
     :param method: Function to be evaluated
     :param value: Result of the function
     """
-    def __init__(self, args, method, value, min_args=None):
+    def __init__(self, args, method, value, min_args=None, post_eval=None):
         self.args = args
         self.method = method
         self.value = value
         self.min_args = min_args
+        self.post_eval = post_eval 
         self.to = []
 
     def add_target(self, target):
@@ -88,7 +89,7 @@ class GraphNode:
         """
         The text representation is the targets and the value
         """
-        return '[{}: {}]'.format(', '.join(self.to), self.value)
+        return '[{}] : {}'.format(', '.join(self.to), self.value)
 
 
 class Node:
@@ -139,7 +140,7 @@ class Method:
                 result[k] = graph2[k]
 
             elif k in graph1 and k in graph2:
-                targets = graph1[k].to + graph2[k].to
+                targets = list(set(graph1[k].to + graph2[k].to))
                 value = graph1[k]
                 value.to = targets                    
                 result[k] = value
@@ -189,15 +190,18 @@ class Method:
         return Node(self.ev_name, self.graph, attrs=self.attrs)
 
 
-def push_first(*args):
-    def push_first_function(*args):
+def gather(*args, condition=None):
+    def _gather_function(*args):
         for a in args:
             if a is not None:
                 return a
 
-    method = Method(push_first_function)
+    method = Method(_gather_function)
     node = method(*args)
     node.graph[method.ev_name].min_args = 1
+    if condition is None:
+        node.graph[method.ev_name].post_eval = all
+
     return node
 
 
@@ -280,6 +284,7 @@ class Contract:
 
         self.eval_graph = self._build_eval_graph(node.graph)
         self.applied_attributes = []
+        self.post_eval_dict = {}
 
     def visualize(self):
         """
@@ -340,9 +345,15 @@ class Contract:
                     self.graph[key].method.__name__,
                     key,
                     eval_args))
-                self.graph[key].value = self.graph[key].method(*eval_args)
+                value = self.graph[key].method(*eval_args)
+                self.graph[key].value = value
+                print('Set', key, 'with value', value)
+
                 self.eval_graph[key]['eval'] = 1
 
+                if self.graph[key].post_eval:
+                    print("Setting for post evaluation")
+                    self.post_eval_dict[key] = (self.graph[key].method, eval_args)
             else:
                 break
 
@@ -356,6 +367,14 @@ class Contract:
         print('Set attribute', attribute)
         if attribute in self.attrs:
             if type(value) == self.attrs[attribute].attr_type:
+
+                # Execute post evaluations
+                for k, v in self.post_eval_dict.items():
+                    condition = v[0](*v[1])
+                    if not condition:
+                        print("--------> Changing evaluation switch")
+                        self.graph[key].eval = 0
+                        
                 self.graph[attribute].value = value
                 print('Walk from', attribute)
                 self._node_eval(attribute)
