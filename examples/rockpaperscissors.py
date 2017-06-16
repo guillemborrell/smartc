@@ -73,7 +73,7 @@ scoreboard5 = game(bets_player1[4], bets_player2[4], scoreboard4)
 got_winner = gather(scoreboard3, scoreboard4, scoreboard5, condition=select_winner)
 notify_winner = winner(got_winner)
 
-contract = Contract(winner)
+contract = Contract(notify_winner)
 print(contract.graph)
 
 contract.set('player1_try0', 'rock')
