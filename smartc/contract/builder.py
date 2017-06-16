@@ -71,12 +71,12 @@ class GraphNode:
     :param method: Function to be evaluated
     :param value: Result of the function
     """
-    def __init__(self, args, method, value, min_args=None, post_eval=None):
+    def __init__(self, args, method, value, min_args=None, lock=False):
         self.args = args
         self.method = method
         self.value = value
         self.min_args = min_args
-        self.post_eval = post_eval 
+        self.lock = lock 
         self.to = []
 
     def add_target(self, target):
@@ -89,7 +89,7 @@ class GraphNode:
         """
         The text representation is the targets and the value
         """
-        return '[{}] : {}'.format(', '.join(self.to), self.value)
+        return '[{}] : {} lock({})'.format(', '.join(self.to), self.value, self.lock)
 
 
 class Node:
@@ -191,16 +191,19 @@ class Method:
 
 
 def gather(*args, condition=None):
-    def _gather_function(*args):
-        for a in args:
-            if a is not None:
-                return a
+    def default_gather(*args):
+        if all(args):
+            return True
+    
+    if condition is None:
+        _gather_function = default_gather
+    else:
+        _gather_function = condition
 
     method = Method(_gather_function)
     node = method(*args)
     node.graph[method.ev_name].min_args = 1
-    if condition is None:
-        node.graph[method.ev_name].post_eval = all
+    node.graph[method.ev_name].lock = True
 
     return node
 
@@ -284,7 +287,6 @@ class Contract:
 
         self.eval_graph = self._build_eval_graph(node.graph)
         self.applied_attributes = []
-        self.post_eval_dict = {}
 
     def visualize(self):
         """
@@ -327,7 +329,9 @@ class Contract:
             previous = self.graph[node].args
             evals = sum([self.eval_graph[n]['eval'] for n in previous])
             has_value = self.eval_graph[node]['eval']
-            if evals >= self.eval_graph[node]['total'] and not has_value:
+            locked = any([self.graph[a].lock for a in self.graph[node].args])
+            total = self.eval_graph[node]['total']
+            if evals >= total and not has_value and not locked:
                 return node
 
     def _node_eval(self, attribute):
@@ -347,13 +351,15 @@ class Contract:
                     eval_args))
                 value = self.graph[key].method(*eval_args)
                 self.graph[key].value = value
+
+                # Unlock if condition for gather is met
+                if value is not None and self.graph[key].lock == True:
+                    print('Unlocking', key)
+                    self.graph[key].lock = False
+                
                 print('Set', key, 'with value', value)
 
                 self.eval_graph[key]['eval'] = 1
-
-                if self.graph[key].post_eval:
-                    print("Setting for post evaluation")
-                    self.post_eval_dict[key] = (self.graph[key].method, eval_args)
             else:
                 break
 
@@ -366,17 +372,15 @@ class Contract:
         """
         print('Set attribute', attribute)
         if attribute in self.attrs:
-            if type(value) == self.attrs[attribute].attr_type:
-
-                # Execute post evaluations
-                for k, v in self.post_eval_dict.items():
-                    condition = v[0](*v[1])
-                    if not condition:
-                        print("--------> Changing evaluation switch")
-                        self.graph[key].eval = 0
-                        
+            if type(value) == self.attrs[attribute].attr_type:                        
                 self.graph[attribute].value = value
                 print('Walk from', attribute)
+                
+                # Reset nodes with locks
+                for node in self.eval_graph:
+                    if self.graph[node].lock == True:
+                        self.eval_graph[node]['eval'] = 0
+                    
                 self._node_eval(attribute)
                 # Traverse from the other attributes in case there are
                 # additional paths
